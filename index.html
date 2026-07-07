@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Quiz Arena</title>
+<style>
+/* ── Reset & Base ───────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0f1a;
+  --surface: #161928;
+  --surface2: #1e2235;
+  --border: #2a2f4a;
+  --text: #e8eaf6;
+  --muted: #7b82a8;
+  --accent: #5b8dee;
+  --accent2: #7c5cd8;
+  --green: #3ecf8e;
+  --red: #f05252;
+  --yellow: #f59e0b;
+  --orange: #fb923c;
+  --radius: 10px;
+  --font: -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+html { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100%;
+  font-size: 15px;
+  line-height: 1.5;
+}
+h1, h2, h3 { line-height: 1.25; }
+button { font-family: var(--font); cursor: pointer; border: none; outline: none; }
+
+/* ── Layout helpers ─────────────────────────────── */
+.screen { display: none; min-height: 100vh; padding: 24px 16px 48px; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.w760 { width: 100%; max-width: 760px; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.col { display: flex; flex-direction: column; gap: 10px; }
+.center { text-align: center; }
+.muted { color: var(--muted); font-size: 13px; }
+label { font-size: 13px; color: var(--muted); font-weight: 500; display: block; margin-bottom: 4px; }
+input[type="text"], input[type="number"], select, textarea {
+  width: 100%; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); font-size: 14px; font-family: var(--font);
+}
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.tag { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn { padding: 11px 22px; border-radius: 8px; font-size: 14px; font-weight: 600; transition: opacity .15s, transform .1s; }
+.btn:active { transform: scale(.97); }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { opacity: .88; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--accent); }
+.btn-green { background: var(--green); color: #0a1a12; }
+.btn-danger { background: var(--red); color: #fff; }
+.btn-lg { padding: 14px 32px; font-size: 16px; border-radius: 10px; }
+.btn-full { width: 100%; }
+
+/* ── Phase 1: Config Screen ─────────────────────── */
+#screen-config { gap: 28px; }
+.logo { font-size: 28px; font-weight: 800; letter-spacing: -1px; }
+.logo span { color: var(--accent); }
+.section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+
+/* Difficulty buttons */
+.diff-group { display: flex; gap: 8px; }
+.diff-btn { flex: 1; padding: 10px; border-radius: 8px; background: var(--surface2); border: 2px solid transparent; color: var(--muted); font-size: 13px; font-weight: 600; transition: all .15s; }
+.diff-btn.selected { border-color: var(--accent); color: var(--accent); background: rgba(91,141,238,.1); }
+
+/* Game mode cards */
+.mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.mode-card { background: var(--surface2); border: 2px solid var(--border); border-radius: var(--radius); padding: 16px; cursor: pointer; transition: all .15s; text-align: center; }
+.mode-card:hover { border-color: var(--muted); }
+.mode-card.selected { border-color: var(--accent); background: rgba(91,141,238,.08); }
+.mode-card .mode-icon { font-size: 32px; margin-bottom: 8px; }
+.mode-card .mode-name { font-weight: 700; font-size: 14px; }
+.mode-card .mode-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* Slider display */
+.slider-row { display: flex; align-items: center; gap: 12px; }
+.slider-val { min-width: 36px; text-align: center; font-weight: 700; font-size: 18px; color: var(--accent); }
+
+/* Popular topics */
+.topic-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.topic-pill { padding: 5px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; cursor: pointer; transition: all .12s; }
+.topic-pill:hover { border-color: var(--accent); color: var(--accent); }
+
+/* AI key area */
+.api-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* ── Phase 2: Loading Screen ─────────────────────── */
+#screen-loading { justify-content: center; gap: 20px; }
+.spinner { width: 52px; height: 52px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 16px; color: var(--muted); text-align: center; }
+.loading-sub { font-size: 13px; color: var(--muted); opacity: .6; }
+
+/* ── HUD (shared across game modes) ──────────────── */
+#game-hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(13,15,26,.92); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 20px; display: none; align-items: center; gap: 16px; justify-content: space-between;
+}
+#game-hud.visible { display: flex; }
+.hud-item { display: flex; flex-direction: column; align-items: center; }
+.hud-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.hud-val { font-size: 18px; font-weight: 800; }
+.hud-score { color: var(--yellow); }
+.hud-combo { color: var(--orange); }
+.hud-q { color: var(--accent); }
+.hud-streak { color: var(--green); }
+.combo-flash { animation: comboPop .4s ease; }
+@keyframes comboPop { 0%{transform:scale(1)} 50%{transform:scale(1.6)} 100%{transform:scale(1)} }
+
+/* ── Progress bar ────────────────────────────────── */
+.progress-bar-wrap { width: 100%; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 8px; }
+.progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
+
+/* ── GAME: Classic Trivia ────────────────────────── */
+#screen-classic { justify-content: flex-start; align-items: center; padding-top: 84px; gap: 20px; }
+.trivia-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px 24px; width: 100%; max-width: 680px; }
+.trivia-q-num { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.trivia-q-text { font-size: 19px; font-weight: 700; margin-top: 10px; line-height: 1.4; }
+.trivia-timer-bar { width: 100%; height: 6px; background: var(--border); border-radius: 3px; margin-top: 16px; overflow: hidden; }
+.trivia-timer-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width .1s linear; }
+.trivia-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+.trivia-opt { padding: 14px 16px; background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; color: var(--text); font-size: 14px; font-weight: 500; text-align: left; transition: all .15s; display: flex; align-items: center; gap: 10px; }
+.trivia-opt:hover:not(:disabled) { border-color: var(--accent); background: rgba(91,141,238,.1); }
+.trivia-opt.correct { border-color: var(--green); background: rgba(62,207,142,.12); color: var(--green); }
+.trivia-opt.wrong { border-color: var(--red); background: rgba(240,82,82,.12); color: var(--red); }
+.trivia-opt.reveal-correct { border-color: var(--green); background: rgba(62,207,142,.08); }
+.opt-letter { width: 26px; height: 26px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.trivia-opt.correct .opt-letter { background: var(--green); color: #0a1a12; }
+.trivia-opt.wrong .opt-letter { background: var(--red); color: #fff; }
+.lifeline-bar { display: flex; gap: 8px; width: 100%; max-width: 680px; }
+.lifeline-btn { padding: 7px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; color: var(--muted); font-size: 12px; font-weight: 600; transition: all .15s; }
+.lifeline-btn:hover:not(:disabled) { border-color: var(--yellow); color: var(--yellow); }
+.lifeline-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+/* Explanation toast */
+.explanation-box { width: 100%; max-width: 680px; background: rgba(91,141,238,.1); border: 1px solid var(--accent); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--text); display: none; }
+.explanation-box.visible { display: block; }
+.explanation-box strong { color: var(--accent); }
+
+/* ── GAME: Bomb Defusal ──────────────────────────── */
+#screen-bomb { justify-content: flex-start; align-items: center; padding-top: 84px; gap: 20px; }
+.bomb-stage { width: 100%; max-width: 640px; }
+.bomb-visual { text-align: center; padding: 20px; }
+.bomb-emoji { font-size: 80px; display: block; transition: all .2s; }
+.bomb-emoji.danger { animation: shake .3s infinite; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+.bomb-timer { font-size: 48px; font-weight: 900; color: var(--red); font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+.bomb-timer.safe { color: var(--yellow); }
+.bomb-timer.critical { color: var(--red); animation: pulse .5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.bomb-q { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; font-size: 17px; font-weight: 600; line-height: 1.45; }
+.bomb-wires { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+.wire-btn { padding: 16px; border-radius: 10px; border: 2px solid; font-size: 13px; font-weight: 700; text-align: left; line-height: 1.4; transition: all .15s; display: flex; align-items: flex-start; gap: 10px; }
+.wire-btn:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.15); }
+.wire-btn:disabled { opacity: .55; cursor: not-allowed; }
+.wire-0 { border-color: #ef4444; background: rgba(239,68,68,.1); color: #fca5a5; }
+.wire-1 { border-color: #3b82f6; background: rgba(59,130,246,.1); color: #93c5fd; }
+.wire-2 { border-color: #f59e0b; background: rgba(245,158,11,.1); color: #fcd34d; }
+.wire-3 { border-color: #10b981; background: rgba(16,185,129,.1); color: #6ee7b7; }
+.wire-btn.cut-correct { background: rgba(62,207,142,.2); border-color: var(--green); color: var(--green); }
+.wire-btn.cut-wrong { background: rgba(240,82,82,.2); border-color: var(--red); color: var(--red); }
+.wire-icon { font-size: 20px; flex-shrink: 0; }
+.explode-overlay { display: none; position: fixed; inset: 0; background: radial-gradient(circle, #ff6b00 0%, #ff0000 40%, #0d0f1a 70%); z-index: 999; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+.explode-overlay.show { display: flex; animation: explodeIn .4s ease; }
+@keyframes explodeIn { from{opacity:0} to{opacity:1} }
+
+/* ── GAME: Dungeon Crawler ───────────────────────── */
+#screen-dungeon { justify-content: flex-start; align-items: center; padding-top: 84px; gap: 16px; }
+.dungeon-arena { width: 100%; max-width: 680px; }
+.dungeon-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.hp-bar-wrap { flex: 1; max-width: 200px; }
+.hp-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.hp-bar { height: 12px; background: var(--border); border-radius: 6px; overflow: hidden; }
+.hp-fill { height: 100%; background: var(--green); border-radius: 6px; transition: width .4s; }
+.hp-fill.low { background: var(--red); }
+.hp-fill.mid { background: var(--yellow); }
+.gold-display { font-size: 16px; font-weight: 700; color: var(--yellow); }
+
+.monster-scene { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+.monster-sprite { font-size: 72px; display: block; transition: all .3s; margin: 0 auto 8px; }
+.monster-sprite.damaged { animation: dmgFlash .4s; }
+@keyframes dmgFlash { 0%,100%{filter:none} 50%{filter:brightness(3) saturate(0)} }
+.monster-sprite.dead { animation: diePop .5s forwards; }
+@keyframes diePop { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.4);opacity:.5} 100%{transform:scale(0);opacity:0} }
+.monster-hp-bar { width: 160px; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin: 0 auto 6px; }
+.monster-hp-fill { height: 100%; background: var(--red); border-radius: 5px; transition: width .3s; }
+.monster-name { font-size: 14px; font-weight: 700; color: var(--red); }
+.monster-lvl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.boss-crown { font-size: 24px; display: block; }
+
+.dungeon-q { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; font-size: 16px; font-weight: 600; margin-top: 14px; line-height: 1.45; }
+.spell-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.spell-btn { padding: 13px 14px; border-radius: 10px; border: 2px solid var(--border); background: var(--surface2); color: var(--text); font-size: 13px; font-weight: 500; text-align: left; transition: all .15s; display: flex; align-items: flex-start; gap: 8px; }
+.spell-btn:hover:not(:disabled) { border-color: var(--accent2); background: rgba(124,92,216,.1); }
+.spell-btn.spell-hit { border-color: var(--green); background: rgba(62,207,142,.12); color: var(--green); }
+.spell-btn.spell-miss { border-color: var(--red); background: rgba(240,82,82,.12); color: var(--red); }
+.spell-icon { font-size: 18px; flex-shrink: 0; }
+.damage-flash { animation: screenShake .3s; }
+@keyframes screenShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+
+/* ── Post-game ───────────────────────────────────── */
+#screen-results { justify-content: center; align-items: center; padding-top: 60px; gap: 24px; }
+.results-hero { text-align: center; }
+.results-grade { font-size: 72px; font-weight: 900; }
+.results-grade.a { color: var(--green); }
+.results-grade.b { color: var(--accent); }
+.results-grade.c { color: var(--yellow); }
+.results-grade.d { color: var(--orange); }
+.results-grade.f { color: var(--red); }
+.results-title { font-size: 22px; font-weight: 700; margin-top: 8px; }
+.results-sub { color: var(--muted); font-size: 14px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; width: 100%; max-width: 680px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; text-align: center; }
+.stat-val { font-size: 22px; font-weight: 800; }
+.stat-lbl { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.review-list { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 10px; }
+.review-item { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.review-item.correct { border-left: 4px solid var(--green); }
+.review-item.wrong { border-left: 4px solid var(--red); }
+.review-q { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.review-ans { font-size: 13px; }
+.review-ans .got { color: var(--green); }
+.review-ans .got.wrong-ans { color: var(--red); }
+.review-expl { font-size: 12px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.results-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+
+/* ── Utility ─────────────────────────────────────── */
+.hidden { display: none !important; }
+.mt8 { margin-top: 8px; }
+.mt16 { margin-top: 16px; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+.demo-banner { background: rgba(245,158,11,.12); border: 1px solid var(--yellow); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--yellow); width: 100%; max-width: 760px; }
+footer { margin-top: 48px; padding-top: 14px; border-top: 1px solid var(--border); text-align: center; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="game-hud">
+  <div class="hud-item"><span class="hud-label">Score</span><span class="hud-val hud-score" id="hud-score">0</span></div>
+  <div class="hud-item"><span class="hud-label">Streak</span><span class="hud-val hud-streak" id="hud-streak">0</span></div>
+  <div class="hud-item"><span class="hud-label">Combo</span><span class="hud-val hud-combo" id="hud-combo">1x</span></div>
+  <div class="hud-item"><span class="hud-label">Question</span><span class="hud-val hud-q" id="hud-q">1 / 10</span></div>
+  <div class="progress-bar-wrap" style="max-width:180px; margin:0;"><div class="progress-bar-fill" id="hud-progress" style="width:0%"></div></div>
+</div>
+
+<!-- SCREEN 1: CONFIG -->
+<div id="screen-config" class="screen active">
+  <div class="w760 col" style="gap:24px; margin-top:16px;">
+    <div class="center">
+      <div class="logo">AI Quiz <span>Arena</span></div>
+      <p class="muted mt8">Generate a quiz on any topic, then play it as a game.</p>
+    </div>
+    <div class="demo-banner">
+      <strong>Demo Mode Active.</strong> No API key? The app runs on built-in sample questions so you can experience all game modes. Add your OpenAI key below to generate real AI questions on any topic.
+    </div>
+    <div class="card">
+      <div class="section-title">OpenAI API Key (Optional)</div>
+      <label>API Key</label>
+      <input type="password" id="api-key-input" placeholder="sk-… (stored in memory only, never sent anywhere except OpenAI)">
+      <p class="api-note mt8">Your key is used only in-browser to call the OpenAI API directly. It is never stored or transmitted to any other server.</p>
+    </div>
+    <div class="card">
+      <div class="section-title">Quiz Topic</div>
+      <label>Enter any topic</label>
+      <input type="text" id="topic-input" placeholder='e.g. "Workday Recruiting", "Black Holes", "Python Lists"'>
+      <div class="topic-pills mt8">
+        <span class="topic-pill" data-topic="World History">World History</span>
+        <span class="topic-pill" data-topic="Python Programming">Python Programming</span>
+        <span class="topic-pill" data-topic="Space Exploration">Space Exploration</span>
+        <span class="topic-pill" data-topic="Pop Culture">Pop Culture</span>
+        <span class="topic-pill" data-topic="Workday HCM">Workday HCM</span>
+        <span class="topic-pill" data-topic="Cybersecurity">Cybersecurity</span>
+        <span class="topic-pill" data-topic="World Geography">World Geography</span>
+        <span class="topic-pill" data-topic="Biology">Biology</span>
+      </div>
+    </div>
+    <div class="row" style="gap:16px;">
+      <div class="card" style="flex:1;">
+        <div class="section-title">Number of Questions</div>
+        <div class="slider-row">
+          <input type="range" id="q-count-slider" min="3" max="20" value="5">
+          <span class="slider-val" id="q-count-display">5</span>
+        </div>
+        <p class="muted">Drag to set 3 – 20 questions</p>
+      </div>
+      <div class="card" style="flex:1;">
+        <div class="section-title">Difficulty</div>
+        <div class="diff-group">
+          <button class="diff-btn selected" data-diff="Beginner">Beginner</button>
+          <button class="diff-btn" data-diff="Intermediate">Intermediate</button>
+          <button class="diff-btn" data-diff="Expert">Expert</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Game Mode</div>
+      <div class="mode-cards">
+        <div class="mode-card selected" data-mode="classic">
+          <div class="mode-icon">🎯</div>
+          <div class="mode-name">Classic Trivia</div>
+          <div class="mode-desc">Lifelines, win streaks, and a high-score board</div>
+        </div>
+        <div class="mode-card" data-mode="bomb">
+          <div class="mode-icon">💣</div>
+          <div class="mode-name">Bomb Defusal</div>
+          <div class="mode-desc">Cut the right wire before the clock hits zero</div>
+        </div>
+        <div class="mode-card" data-mode="dungeon">
+          <div class="mode-icon">⚔️</div>
+          <div class="mode-name">Dungeon Crawler</div>
+          <div class="mode-desc">Cast spells to defeat monsters; survive the boss</div>
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-lg btn-full" id="start-btn">Generate Quiz &amp; Start Game</button>
+  </div>
+  <footer>Made with IBM Bob</footer>
+</div>
+
+<!-- SCREEN 2: LOADING -->
+<div id="screen-loading" class="screen">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Generating your quiz…</div>
+  <div class="loading-sub" id="loading-sub">Asking AI to craft questions on your topic</div>
+</div>
+
+<!-- SCREEN 3a: CLASSIC -->
+<div id="screen-classic" class="screen">
+  <div class="lifeline-bar w760" id="lifeline-bar">
+    <span style="font-size:12px;color:var(--muted);align-self:center;">Lifelines:</span>
+    <button class="lifeline-btn" id="ll-5050">50/50</button>
+    <button class="lifeline-btn" id="ll-skip">⏭ Skip</button>
+  </div>
+  <div class="trivia-card">
+    <div class="trivia-q-num" id="trivia-q-num">Question 1 of 10</div>
+    <div class="trivia-q-text" id="trivia-q-text">Loading question…</div>
+    <div class="trivia-timer-bar"><div class="trivia-timer-fill" id="trivia-timer-fill" style="width:100%"></div></div>
+    <div class="trivia-options" id="trivia-options"></div>
+  </div>
+  <div class="explanation-box" id="trivia-explanation"></div>
+  <button class="btn btn-primary hidden" id="trivia-next-btn" style="min-width:160px;">Next Question →</button>
+</div>
+
+<!-- SCREEN 3b: BOMB -->
+<div id="screen-bomb" class="screen">
+  <div class="bomb-stage w760">
+    <div class="bomb-visual card center">
+      <span class="bomb-emoji" id="bomb-emoji">💣</span>
+      <div class="bomb-timer" id="bomb-timer">15</div>
+      <p class="muted" style="font-size:12px;margin-top:4px;">seconds to defuse</p>
+    </div>
+    <div class="bomb-q mt8" id="bomb-q-text">Loading…</div>
+    <div class="bomb-wires mt8" id="bomb-wires"></div>
+    <div class="explanation-box mt8" id="bomb-explanation"></div>
+    <button class="btn btn-primary hidden mt8" id="bomb-next-btn" style="min-width:160px;">Next Wire →</button>
+  </div>
+</div>
+
+<div class="explode-overlay" id="explode-overlay">
+  <div style="font-size:80px;">💥</div>
+  <div style="font-size:28px;font-weight:800;color:#fff;">BOOM!</div>
+  <div style="color:#fca5a5;">You ran out of time or cut the wrong wire.</div>
+  <button class="btn btn-danger btn-lg" id="bomb-continue-btn" style="margin-top:12px;">Continue Anyway →</button>
+</div>
+
+<!-- SCREEN 3c: DUNGEON -->
+<div id="screen-dungeon" class="screen">
+  <div class="dungeon-arena w760">
+    <div class="dungeon-header">
+      <div class="hp-bar-wrap">
+        <div class="hp-label">Player HP <span id="hp-display" style="color:var(--green);font-weight:700;">100</span>/100</div>
+        <div class="hp-bar"><div class="hp-fill" id="hp-fill" style="width:100%"></div></div>
+      </div>
+      <div class="gold-display">⚔️ <span id="gold-display">0</span> Gold</div>
+    </div>
+    <div class="monster-scene card">
+      <span class="boss-crown hidden" id="boss-crown">👑 BOSS FIGHT</span>
+      <span class="monster-sprite" id="monster-sprite">👹</span>
+      <div class="monster-hp-bar"><div class="monster-hp-fill" id="monster-hp-fill" style="width:100%"></div></div>
+      <div class="monster-name" id="monster-name">Goblin Scout</div>
+      <div class="monster-lvl" id="monster-lvl">Level 1 Monster</div>
+    </div>
+    <div class="dungeon-q" id="dungeon-q-text">Loading…</div>
+    <div class="spell-grid" id="spell-grid"></div>
+    <div class="explanation-box mt8" id="dungeon-explanation"></div>
+    <button class="btn btn-primary hidden mt8" id="dungeon-next-btn" style="min-width:180px;">Fight Next Monster →</button>
+  </div>
+</div>
+
+<!-- SCREEN 4: RESULTS -->
+<div id="screen-results" class="screen">
+  <div class="results-hero center w760">
+    <div class="results-grade" id="results-grade">A</div>
+    <div class="results-title" id="results-title">Outstanding!</div>
+    <div class="results-sub" id="results-sub">Quiz Complete</div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-val" id="stat-acc">0%</div><div class="stat-lbl">Accuracy</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-score">0</div><div class="stat-lbl">Final Score</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-speed">0s</div><div class="stat-lbl">Avg Speed</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-streak">0</div><div class="stat-lbl">Best Streak</div></div>
+  </div>
+  <div class="review-list" id="review-list"></div>
+  <div class="results-actions">
+    <button class="btn btn-secondary" id="play-again-btn">Play Again (Same)</button>
+    <button class="btn btn-primary" id="new-quiz-btn">New Quiz</button>
+  </div>
+  <footer style="width:100%;">Made with IBM Bob</footer>
+</div>
+
+<script>
+const state = {
+  apiKey:'',topic:'',count:5,difficulty:'Beginner',mode:'classic',
+  questions:[],currentQ:0,score:0,streak:0,bestStreak:0,combo:1,answers:[],
+  questionStartTime:0,classicTimer:null,classicTimerVal:0,
+  classicLifelines:{fifty:true,skip:true},
+  bombTimer:null,bombTimerVal:0,bombPenaltyActive:false,
+  playerHP:100,gold:0,monsterHP:100
+};
+const MONSTERS=[
+  {name:'Goblin Scout',sprite:'👺',level:1},{name:'Cave Troll',sprite:'👾',level:2},
+  {name:'Dark Mage',sprite:'🧙',level:3},{name:'Undead Knight',sprite:'💀',level:4},
+  {name:'Wyvern',sprite:'🐉',level:5},{name:'Shadow Demon',sprite:'👿',level:6},
+  {name:'Stone Giant',sprite:'🗿',level:7},{name:'Lich King',sprite:'🦇',level:8},
+  {name:'Chaos Drake',sprite:'🐲',level:9},{name:'FINAL BOSS',sprite:'😈',level:'BOSS'}
+];
+const SPELLS=['🔥','💧','⚡','🌀'];
+const WIRE_LABELS=['A','B','C','D'];
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+  const hud=document.getElementById('game-hud');
+  ['classic','bomb','dungeon'].includes(id)?hud.classList.add('visible'):hud.classList.remove('visible');
+}
+function updateHUD(){
+  document.getElementById('hud-score').textContent=state.score;
+  const ce=document.getElementById('hud-combo');
+  ce.textContent=state.combo+'x';
+  if(state.combo>1){ce.classList.add('combo-flash');setTimeout(()=>ce.classList.remove('combo-flash'),400);}
+  document.getElementById('hud-streak').textContent=state.streak;
+  document.getElementById('hud-q').textContent=(state.currentQ+1)+' / '+state.questions.length;
+  document.getElementById('hud-progress').style.width=(state.currentQ/state.questions.length*100)+'%';
+}
+
+document.getElementById('q-count-slider').addEventListener('input',e=>{state.count=+e.target.value;document.getElementById('q-count-display').textContent=e.target.value;});
+document.querySelectorAll('.diff-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.diff-btn').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');state.difficulty=b.dataset.diff;}));
+document.querySelectorAll('.mode-card').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('.mode-card').forEach(x=>x.classList.remove('selected'));c.classList.add('selected');state.mode=c.dataset.mode;}));
+document.querySelectorAll('.topic-pill').forEach(p=>p.addEventListener('click',()=>{document.getElementById('topic-input').value=p.dataset.topic;state.topic=p.dataset.topic;}));
+document.getElementById('topic-input').addEventListener('input',e=>state.topic=e.target.value.trim());
+document.getElementById('api-key-input').addEventListener('input',e=>state.apiKey=e.target.value.trim());
+
+function generateDemoQuestions(topic,count,difficulty){
+  const pool=[
+    {question_text:`Which of the following BEST describes a key concept in ${topic}?`,options:['Option Alpha — foundational principle','Option Beta — common misconception','Option Gamma — partially correct','Option Delta — unrelated concept'],correct_answer:'Option Alpha — foundational principle',explanation:`In ${topic}, foundational principles form the basis of all advanced knowledge.`},
+    {question_text:`A practitioner is configuring a ${topic} workflow. What is the FIRST step?`,options:['Define the requirements','Skip to implementation','Delete existing records','Request admin access randomly'],correct_answer:'Define the requirements',explanation:'Always begin with defining requirements before configuration.'},
+    {question_text:`In a ${difficulty} scenario involving ${topic}, which action produces the most reliable outcome?`,options:['Follow established best practices','Improvise based on assumptions','Copy a random template','Avoid documentation'],correct_answer:'Follow established best practices',explanation:`Best practices in ${topic} are validated approaches that reduce risk.`},
+    {question_text:`Which term refers to the highest-level organisational unit in ${topic}?`,options:['Root Entity','Sub-group','Leaf Node','Temporary Record'],correct_answer:'Root Entity',explanation:`In most ${topic} systems, the root entity sits at the top of the hierarchy.`},
+    {question_text:`A ${difficulty}-level user is troubleshooting an error in ${topic}. What should they check FIRST?`,options:['Audit logs and error messages','Restart everything','Delete all configurations','Contact vendor immediately'],correct_answer:'Audit logs and error messages',explanation:'Audit logs provide a traceable record of system events.'},
+    {question_text:`Which security approach is recommended when working with ${topic}?`,options:['Least privilege access','Full admin for all users','No authentication required','Share credentials freely'],correct_answer:'Least privilege access',explanation:'Least privilege ensures each user has only the access they need.'},
+    {question_text:`What is the purpose of a template in ${topic}?`,options:['To standardise and reuse configuration across multiple records','To store archived data','To restrict user access','To generate billing reports'],correct_answer:'To standardise and reuse configuration across multiple records',explanation:'Templates promote consistency and efficiency by allowing reuse of pre-configured settings.'},
+    {question_text:`In ${topic}, a "condition rule" is BEST described as:`,options:['Logic that triggers specific behaviour based on criteria','A mandatory approval step','A security group assignment','A type of report filter'],correct_answer:'Logic that triggers specific behaviour based on criteria',explanation:'Condition rules evaluate data and determine which path or default value to apply.'},
+    {question_text:`Which of the following is a valid reason to use a notification in ${topic}?`,options:['Alert stakeholders when a key event occurs in a process','Replace all manual communication','Grant additional security access','Archive completed records'],correct_answer:'Alert stakeholders when a key event occurs in a process',explanation:'Notifications keep relevant parties informed about process milestones.'},
+    {question_text:`A ${difficulty} ${topic} exam requires you to demonstrate which core ability?`,options:['Apply and analyse concepts in realistic scenarios','Memorise all documentation','Complete tasks without any tools','Avoid using system configuration'],correct_answer:'Apply and analyse concepts in realistic scenarios',explanation:'Professional certifications test applied knowledge in context.'},
+    {question_text:`Which report type in ${topic} is BEST for real-time operational data?`,options:['Transactional report','Historical archive','Static PDF export','Manual spreadsheet'],correct_answer:'Transactional report',explanation:'Transactional reports pull live data from the system.'},
+    {question_text:`When integrating ${topic} with an external system, what format is most commonly used?`,options:['JSON or XML via API','Fax transmission','Physical printout','Internal memo'],correct_answer:'JSON or XML via API',explanation:'Modern system integrations use JSON or XML payloads over APIs.'},
+    {question_text:`A business process in ${topic} requires approval from two separate teams. This is an example of:`,options:['Sequential multi-step approval','Single-step approval','Automated bypass','Ad hoc manual process'],correct_answer:'Sequential multi-step approval',explanation:'Sequential approvals route the request through each approver in a defined order.'},
+    {question_text:`In ${topic}, what does "role-based access control" (RBAC) ensure?`,options:['Users access only what their role permits','All users share the same permissions','Admins can impersonate any user','Access is unrestricted by default'],correct_answer:'Users access only what their role permits',explanation:'RBAC ties permissions to roles rather than individual users.'},
+    {question_text:`Which practice supports auditability in ${topic}?`,options:['Maintaining structured logs of configuration changes','Deleting records after each cycle','Disabling audit trails to save storage','Sharing admin credentials'],correct_answer:'Maintaining structured logs of configuration changes',explanation:'Audit logs provide an immutable record of changes, essential for compliance.'},
+    {question_text:`How does a ${difficulty}-level professional approach a new ${topic} implementation?`,options:['Gather requirements, plan, configure, test, deploy','Deploy first, fix later','Skip testing to meet deadlines','Copy a random production configuration'],correct_answer:'Gather requirements, plan, configure, test, deploy',explanation:'A structured methodology reduces rework and ensures the solution meets business needs.'},
+    {question_text:`What is the recommended way to test changes in ${topic} before going live?`,options:['Use a sandbox or test environment','Test directly in production','Ask end users to test without guidance','Skip testing for minor changes'],correct_answer:'Use a sandbox or test environment',explanation:'Sandboxes isolate changes from production data, allowing safe testing.'},
+    {question_text:`In ${topic}, a "disposition" typically refers to:`,options:['An outcome status applied to a record or transaction','A type of user interface component','A financial ledger entry','A hardware configuration'],correct_answer:'An outcome status applied to a record or transaction',explanation:'Dispositions capture the result of a process step.'},
+    {question_text:`Which element makes a ${topic} business process "dynamic"?`,options:['Condition rules that vary the path based on data','A fixed linear sequence of steps','Manual email routing','Random step assignment'],correct_answer:'Condition rules that vary the path based on data',explanation:'Dynamic business processes adapt their flow based on conditions.'},
+    {question_text:`A ${difficulty} ${topic} scenario asks you to grant access to a single record without changing global permissions. What should you use?`,options:['Ad hoc or record-level role assignment','Global admin rights','Remove all other users first','Disable security entirely'],correct_answer:'Ad hoc or record-level role assignment',explanation:'Record-level access grants targeted permissions for a specific object.'}
+  ];
+  return pool.sort(()=>Math.random()-.5).slice(0,Math.min(count,pool.length)).map((q,i)=>({...q,id:i+1}));
+}
+
+async function fetchQuestionsFromAI(topic,count,difficulty){
+  const sys=`You are an expert quiz generator. Generate a multiple-choice quiz. Return ONLY valid JSON, no markdown.`;
+  const usr=`Topic: ${topic}\nDifficulty: ${difficulty}\nNumber of Questions: ${count}\n\nEach question must have exactly 4 options. Only one is correct. Include a brief explanation.\n\nJSON format:\n{"quiz_metadata":{"topic":"${topic}","difficulty":"${difficulty}"},"questions":[{"id":1,"question_text":"...","options":["A","B","C","D"],"correct_answer":"A","explanation":"..."}]}`;
+  const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${state.apiKey}`},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],temperature:0.7})});
+  if(!res.ok) throw new Error('API error '+res.status);
+  const data=await res.json();
+  let raw=data.choices[0].message.content.trim().replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/,'').trim();
+  return JSON.parse(raw).questions;
+}
+
+document.getElementById('start-btn').addEventListener('click',async()=>{
+  const topic=document.getElementById('topic-input').value.trim()||'General Knowledge';
+  state.topic=topic; state.count=+document.getElementById('q-count-slider').value;
+  state.apiKey=document.getElementById('api-key-input').value.trim();
+  state.currentQ=0;state.score=0;state.streak=0;state.bestStreak=0;
+  state.combo=1;state.answers=[];state.playerHP=100;state.gold=0;
+  state.classicLifelines={fifty:true,skip:true};
+  showScreen('loading');
+  document.getElementById('loading-text').textContent=`Generating ${state.count} questions on "${topic}"…`;
+  document.getElementById('loading-sub').textContent=state.apiKey?'Calling OpenAI API…':'Using built-in demo questions (no API key provided)';
+  try{
+    state.questions=state.apiKey?await fetchQuestionsFromAI(topic,state.count,state.difficulty):await(async()=>{await new Promise(r=>setTimeout(r,1400));return generateDemoQuestions(topic,state.count,state.difficulty);})();
+    startGame();
+  }catch(e){
+    document.getElementById('loading-text').textContent='AI error — falling back to demo questions';
+    document.getElementById('loading-sub').textContent=e.message;
+    await new Promise(r=>setTimeout(r,1500));
+    state.questions=generateDemoQuestions(topic,state.count,state.difficulty);
+    startGame();
+  }
+});
+
+function startGame(){updateHUD();if(state.mode==='classic')startClassic();else if(state.mode==='bomb')startBomb();else startDungeon();}
+
+function registerAnswer(correct,timeTaken,userAnswer){
+  const q=state.questions[state.currentQ];
+  if(correct){state.streak++;if(state.streak>state.bestStreak)state.bestStreak=state.streak;state.combo=Math.min(Math.floor(state.streak/2)+1,5);const base=state.mode==='bomb'?150:state.mode==='dungeon'?120:100;state.score+=(base+Math.max(0,Math.floor((20-timeTaken/1000)*5)))*state.combo;}
+  else{state.streak=0;state.combo=1;}
+  state.answers.push({correct,timeTaken,userAnswer,correctAnswer:q.correct_answer,explanation:q.explanation,question:q.question_text});
+  updateHUD();
+}
+function nextQuestion(){state.currentQ++;if(state.currentQ>=state.questions.length){showResults();return;}updateHUD();if(state.mode==='classic')renderClassicQuestion();else if(state.mode==='bomb')renderBombQuestion();else renderDungeonQuestion();}
+
+// CLASSIC
+const CLASSIC_TIME=20;
+function startClassic(){document.getElementById('ll-5050').disabled=false;document.getElementById('ll-skip').disabled=false;showScreen('classic');renderClassicQuestion();}
+function renderClassicQuestion(){
+  clearInterval(state.classicTimer);
+  const q=state.questions[state.currentQ];
+  document.getElementById('trivia-q-num').textContent=`Question ${state.currentQ+1} of ${state.questions.length}`;
+  document.getElementById('trivia-q-text').textContent=q.question_text;
+  document.getElementById('trivia-explanation').classList.remove('visible');
+  document.getElementById('trivia-next-btn').classList.add('hidden');
+  const optsEl=document.getElementById('trivia-options');optsEl.innerHTML='';
+  (q.options||[]).forEach((opt,i)=>{const btn=document.createElement('button');btn.className='trivia-opt';btn.innerHTML=`<span class="opt-letter">${['A','B','C','D'][i]}</span>${opt}`;btn.addEventListener('click',()=>handleClassicAnswer(opt,btn,optsEl));optsEl.appendChild(btn);});
+  state.classicTimerVal=CLASSIC_TIME;state.questionStartTime=Date.now();
+  const fillEl=document.getElementById('trivia-timer-fill');fillEl.style.width='100%';fillEl.style.background='var(--green)';
+  state.classicTimer=setInterval(()=>{state.classicTimerVal-=.1;const p=(state.classicTimerVal/CLASSIC_TIME)*100;fillEl.style.width=p+'%';if(p<40)fillEl.style.background='var(--yellow)';if(p<15)fillEl.style.background='var(--red)';if(state.classicTimerVal<=0){clearInterval(state.classicTimer);handleClassicAnswer(null,null,optsEl);}},100);
+}
+function handleClassicAnswer(chosen,clickedBtn,optsEl){
+  clearInterval(state.classicTimer);
+  const q=state.questions[state.currentQ];const timeTaken=Date.now()-state.questionStartTime;const correct=chosen===q.correct_answer;
+  optsEl.querySelectorAll('.trivia-opt').forEach(b=>b.disabled=true);
+  if(clickedBtn){clickedBtn.classList.add(correct?'correct':'wrong');if(!correct)optsEl.querySelectorAll('.trivia-opt').forEach(b=>{if(b.textContent.trim().slice(1).trim()===q.correct_answer)b.classList.add('correct');});}
+  registerAnswer(correct,timeTaken,chosen);playTone(correct);
+  const expl=document.getElementById('trivia-explanation');expl.innerHTML=`<strong>${correct?'✓ Correct!':(chosen?'✗ Incorrect.':'⏱ Time up.')}</strong> ${q.explanation}`;expl.classList.add('visible');
+  document.getElementById('trivia-next-btn').classList.remove('hidden');
+}
+document.getElementById('trivia-next-btn').addEventListener('click',()=>nextQuestion());
+document.getElementById('ll-5050').addEventListener('click',()=>{if(!state.classicLifelines.fifty)return;state.classicLifelines.fifty=false;document.getElementById('ll-5050').disabled=true;const q=state.questions[state.currentQ];let h=0;document.getElementById('trivia-options').querySelectorAll('.trivia-opt').forEach(b=>{if(b.textContent.trim().slice(1).trim()!==q.correct_answer&&h<2){b.style.visibility='hidden';h++;}});});
+document.getElementById('ll-skip').addEventListener('click',()=>{if(!state.classicLifelines.skip)return;state.classicLifelines.skip=false;document.getElementById('ll-skip').disabled=true;clearInterval(state.classicTimer);state.answers.push({correct:false,timeTaken:0,userAnswer:'SKIPPED',correctAnswer:state.questions[state.currentQ].correct_answer,explanation:state.questions[state.currentQ].explanation,question:state.questions[state.currentQ].question_text});nextQuestion();});
+
+// BOMB
+const BOMB_TIMES={Beginner:20,Intermediate:15,Expert:10};
+function startBomb(){showScreen('bomb');renderBombQuestion();}
+function renderBombQuestion(){
+  clearInterval(state.bombTimer);document.getElementById('explode-overlay').classList.remove('show');
+  const q=state.questions[state.currentQ];document.getElementById('bomb-q-text').textContent=q.question_text;
+  document.getElementById('bomb-explanation').classList.remove('visible');document.getElementById('bomb-next-btn').classList.add('hidden');
+  document.getElementById('bomb-emoji').className='bomb-emoji';
+  const allotted=BOMB_TIMES[state.difficulty]||15;state.bombTimerVal=allotted;state.questionStartTime=Date.now();
+  const timerEl=document.getElementById('bomb-timer');timerEl.textContent=allotted;timerEl.className='bomb-timer safe';
+  const wiresEl=document.getElementById('bomb-wires');wiresEl.innerHTML='';
+  (q.options||[]).forEach((opt,i)=>{const btn=document.createElement('button');btn.className=`wire-btn wire-${i}`;btn.innerHTML=`<span class="wire-icon">✂️</span><span>${WIRE_LABELS[i]}. ${opt}</span>`;btn.addEventListener('click',()=>handleBombAnswer(opt,btn,wiresEl));wiresEl.appendChild(btn);});
+  state.bombTimer=setInterval(()=>{state.bombTimerVal--;timerEl.textContent=state.bombTimerVal;if(state.bombTimerVal<=5){timerEl.className='bomb-timer critical';document.getElementById('bomb-emoji').classList.add('danger');}else if(state.bombTimerVal<=10){timerEl.className='bomb-timer';}if(state.bombTimerVal<=0){clearInterval(state.bombTimer);triggerExplosion(wiresEl);}},1000);
+}
+function handleBombAnswer(chosen,clickedBtn,wiresEl){
+  clearInterval(state.bombTimer);const q=state.questions[state.currentQ];const timeTaken=Date.now()-state.questionStartTime;const correct=chosen===q.correct_answer;
+  wiresEl.querySelectorAll('.wire-btn').forEach(b=>b.disabled=true);clickedBtn.classList.add(correct?'cut-correct':'cut-wrong');
+  if(!correct)wiresEl.querySelectorAll('.wire-btn').forEach(b=>{if(b.querySelector('span:last-child').textContent.trim().slice(3).trim()===q.correct_answer)b.classList.add('cut-correct');});
+  registerAnswer(correct,timeTaken,chosen);playTone(correct);
+  document.getElementById('bomb-emoji').textContent=correct?'✅':'💣';
+  const expl=document.getElementById('bomb-explanation');expl.innerHTML=`<strong>${correct?'🧨 Wire cut! Defused!':'💥 Wrong wire!'}</strong> ${q.explanation}`;expl.classList.add('visible');
+  document.getElementById('bomb-next-btn').classList.remove('hidden');
+}
+function triggerExplosion(wiresEl){wiresEl.querySelectorAll('.wire-btn').forEach(b=>b.disabled=true);registerAnswer(false,(BOMB_TIMES[state.difficulty]||15)*1000,'TIMEOUT');document.getElementById('explode-overlay').classList.add('show');playTone(false);}
+document.getElementById('bomb-continue-btn').addEventListener('click',()=>{document.getElementById('explode-overlay').classList.remove('show');const q=state.questions[state.currentQ];document.getElementById('bomb-explanation').innerHTML=`<strong>⏱ Time ran out.</strong> ${q.explanation}`;document.getElementById('bomb-explanation').classList.add('visible');document.getElementById('bomb-next-btn').classList.remove('hidden');});
+document.getElementById('bomb-next-btn').addEventListener('click',()=>nextQuestion());
+
+// DUNGEON
+function startDungeon(){showScreen('dungeon');renderDungeonQuestion();}
+function renderDungeonQuestion(){
+  const q=state.questions[state.currentQ];const mi=Math.min(state.currentQ,MONSTERS.length-1);const isBoss=state.currentQ===state.questions.length-1;
+  const monster=isBoss?MONSTERS[MONSTERS.length-1]:MONSTERS[mi%(MONSTERS.length-1)];
+  document.getElementById('monster-sprite').textContent=monster.sprite;document.getElementById('monster-sprite').className='monster-sprite';
+  document.getElementById('monster-name').textContent=monster.name;document.getElementById('monster-lvl').textContent=isBoss?'⚠️ FINAL BOSS — Maximum Difficulty':`Level ${monster.level} Monster`;
+  document.getElementById('monster-hp-fill').style.width='100%';document.getElementById('boss-crown').classList.toggle('hidden',!isBoss);
+  document.getElementById('dungeon-q-text').textContent=q.question_text;document.getElementById('dungeon-explanation').classList.remove('visible');document.getElementById('dungeon-next-btn').classList.add('hidden');
+  const grid=document.getElementById('spell-grid');grid.innerHTML='';state.questionStartTime=Date.now();
+  (q.options||[]).forEach((opt,i)=>{const btn=document.createElement('button');btn.className='spell-btn';btn.innerHTML=`<span class="spell-icon">${SPELLS[i]}</span><span>${opt}</span>`;btn.addEventListener('click',()=>handleDungeonAnswer(opt,btn,grid));grid.appendChild(btn);});
+}
+function handleDungeonAnswer(chosen,clickedBtn,grid){
+  const q=state.questions[state.currentQ];const timeTaken=Date.now()-state.questionStartTime;const correct=chosen===q.correct_answer;
+  grid.querySelectorAll('.spell-btn').forEach(b=>b.disabled=true);clickedBtn.classList.add(correct?'spell-hit':'spell-miss');
+  if(!correct){grid.querySelectorAll('.spell-btn').forEach(b=>{if(b.querySelector('span:last-child').textContent.trim()===q.correct_answer)b.classList.add('spell-hit');});const dmg=state.difficulty==='Expert'?30:state.difficulty==='Intermediate'?20:12;state.playerHP=Math.max(0,state.playerHP-dmg);document.getElementById('hp-display').textContent=state.playerHP;const p=state.playerHP;const fill=document.getElementById('hp-fill');fill.style.width=p+'%';fill.className='hp-fill'+(p<30?' low':p<60?' mid':'');}
+  else{state.gold+=10*state.combo;document.getElementById('gold-display').textContent=state.gold;setTimeout(()=>document.getElementById('monster-sprite').classList.add('dead'),100);document.getElementById('monster-hp-fill').style.width='0%';}
+  registerAnswer(correct,timeTaken,chosen);playTone(correct);
+  const expl=document.getElementById('dungeon-explanation');expl.innerHTML=`<strong>${correct?'⚔️ Monster defeated!':'🛡 The monster attacks!'}</strong> ${q.explanation}`;expl.classList.add('visible');
+  const nb=document.getElementById('dungeon-next-btn');nb.textContent=state.currentQ===state.questions.length-1?'View Results →':'Fight Next Monster →';nb.classList.remove('hidden');
+}
+document.getElementById('dungeon-next-btn').addEventListener('click',()=>nextQuestion());
+
+// RESULTS
+function showResults(){
+  document.getElementById('game-hud').classList.remove('visible');showScreen('results');
+  const total=state.answers.length;const correct=state.answers.filter(a=>a.correct).length;
+  const acc=total?Math.round((correct/total)*100):0;const avgSpeed=total?Math.round(state.answers.reduce((s,a)=>s+a.timeTaken,0)/total/1000):0;
+  let grade='F',gClass='f',title='Keep Practicing';
+  if(acc>=90){grade='A';gClass='a';title='Outstanding!';}else if(acc>=80){grade='B';gClass='b';title='Great Work!';}else if(acc>=70){grade='C';gClass='c';title='Good Effort!';}else if(acc>=60){grade='D';gClass='d';title='Almost There';}
+  document.getElementById('results-grade').textContent=grade;document.getElementById('results-grade').className='results-grade '+gClass;
+  document.getElementById('results-title').textContent=title;document.getElementById('results-sub').textContent=`${correct} / ${total} correct on "${state.topic}" (${state.difficulty})`;
+  document.getElementById('stat-acc').textContent=acc+'%';document.getElementById('stat-score').textContent=state.score.toLocaleString();document.getElementById('stat-speed').textContent=avgSpeed+'s';document.getElementById('stat-streak').textContent=state.bestStreak;
+  const reviewEl=document.getElementById('review-list');reviewEl.innerHTML='';
+  state.answers.forEach((a,i)=>{const div=document.createElement('div');div.className='review-item '+(a.correct?'correct':'wrong');div.innerHTML=`<div class="review-q">${i+1}. ${a.question}</div><div class="review-ans"><span class="got ${a.correct?'':'wrong-ans'}">${a.correct?'✓':'✗'} Your answer: ${a.userAnswer||'(none)'}</span>${!a.correct?` &nbsp;·&nbsp; <span style="color:var(--green);">✓ Correct: ${a.correctAnswer}</span>`:''}</div><div class="review-expl">${a.explanation}</div>`;reviewEl.appendChild(div);});
+}
+document.getElementById('play-again-btn').addEventListener('click',()=>{state.currentQ=0;state.score=0;state.streak=0;state.bestStreak=0;state.combo=1;state.answers=[];state.playerHP=100;state.gold=0;state.classicLifelines={fifty:true,skip:true};startGame();});
+document.getElementById('new-quiz-btn').addEventListener('click',()=>{clearInterval(state.classicTimer);clearInterval(state.bombTimer);document.getElementById('explode-overlay').classList.remove('show');showScreen('config');});
+
+// AUDIO
+let audioCtx=null;
+function getAudioCtx(){if(!audioCtx){try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}return audioCtx;}
+function playTone(correct){const ctx=getAudioCtx();if(!ctx)return;const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);if(correct){osc.type='sine';osc.frequency.setValueAtTime(523,ctx.currentTime);osc.frequency.setValueAtTime(659,ctx.currentTime+.1);osc.frequency.setValueAtTime(784,ctx.currentTime+.2);gain.gain.setValueAtTime(.15,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.5);osc.start(ctx.currentTime);osc.stop(ctx.currentTime+.5);}else{osc.type='sawtooth';osc.frequency.setValueAtTime(220,ctx.currentTime);osc.frequency.setValueAtTime(110,ctx.currentTime+.15);gain.gain.setValueAtTime(.12,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.4);osc.start(ctx.currentTime);osc.stop(ctx.currentTime+.4);}}
+</script>
+</body>
+</html>
