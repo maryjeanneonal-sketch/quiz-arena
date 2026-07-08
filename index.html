@@ -636,14 +636,29 @@ Requirements:
 
 Return ONLY this exact JSON structure with no other text:
 {"quiz_metadata":{"topic":"${topic}","difficulty":"${difficulty}","total_questions":${count}},"questions":[{"id":1,"question_text":"Scenario: [2-3 sentence workplace situation describing a realistic Workday consulting or admin scenario]. [Specific question ending with ?]","options":["a. [option text]","b. [option text]","c. [option text]","d. [option text]"],"correct_answer":"a. [matching option text]","explanation":"[Concise explanation naming the specific Workday concept, configuration object, or behavior that makes this the correct answer.]"}]}`;
-  const res=await fetch('https://api.openai.com/v1/chat/completions',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':`Bearer ${state.apiKey}`},
-    body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],temperature:0.7})
-  });
+  let res;
+  try{
+    res=await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      mode:'cors',
+      headers:{
+        'Content-Type':'application/json',
+        'Authorization':`Bearer ${state.apiKey.trim()}`
+      },
+      body:JSON.stringify({
+        model:'gpt-4o-mini',
+        messages:[{role:'system',content:sys},{role:'user',content:usr}],
+        temperature:0.7,
+        max_tokens:4000
+      })
+    });
+  }catch(networkErr){
+    throw new Error('Network error — check your internet connection or that the API key has no extra spaces. Detail: '+networkErr.message);
+  }
   if(!res.ok){
-    const errBody=await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${errBody.slice(0,200)}`);
+    let errBody='';
+    try{errBody=await res.text();}catch(_){}
+    throw new Error(`OpenAI API error ${res.status}: ${errBody.slice(0,300)}`);
   }
   const data=await res.json();
   if(!data.choices||!data.choices[0]) throw new Error('No choices returned from OpenAI');
