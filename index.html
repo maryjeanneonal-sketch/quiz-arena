@@ -791,8 +791,32 @@ function showResults(){
   const reviewEl=document.getElementById('review-list');reviewEl.innerHTML='';
   state.answers.forEach((a,i)=>{const div=document.createElement('div');div.className='review-item '+(a.correct?'correct':'wrong');div.innerHTML=`<div class="review-q">${i+1}. ${a.question}</div><div class="review-ans"><span class="got ${a.correct?'':'wrong-ans'}">${a.correct?'✓':'✗'} Your answer: ${a.userAnswer||'(none)'}</span>${!a.correct?` &nbsp;·&nbsp; <span style="color:var(--green);">✓ Correct: ${a.correctAnswer}</span>`:''}</div><div class="review-expl">${a.explanation}</div>`;reviewEl.appendChild(div);});
 }
-document.getElementById('play-again-btn').addEventListener('click',()=>{state.currentQ=0;state.score=0;state.streak=0;state.bestStreak=0;state.combo=1;state.answers=[];state.playerHP=100;state.gold=0;state.classicLifelines={fifty:true,skip:true};startGame();});
-document.getElementById('new-quiz-btn').addEventListener('click',()=>{clearInterval(state.classicTimer);clearInterval(state.bombTimer);document.getElementById('explode-overlay').classList.remove('show');showScreen('config');});
+document.getElementById('play-again-btn').addEventListener('click',async()=>{
+  // Reset game state
+  state.currentQ=0;state.score=0;state.streak=0;state.bestStreak=0;
+  state.combo=1;state.answers=[];state.playerHP=100;state.gold=0;
+  state.classicLifelines={fifty:true,skip:true};
+  // Clear used pool so a completely fresh set is drawn
+  clearUsed();
+  showScreen('loading');
+  document.getElementById('loading-text').textContent=`Generating ${state.count} fresh questions…`;
+  document.getElementById('loading-sub').textContent=state.apiKey?'Calling OpenAI API…':'Drawing from built-in question pool';
+  try{
+    state.questions=state.apiKey
+      ?await fetchQuestionsFromAI(state.topic,state.count,state.difficulty)
+      :await(async()=>{await new Promise(r=>setTimeout(r,900));return generateDemoQuestions(state.topic,state.count,state.difficulty);})();
+  }catch(e){
+    state.questions=generateDemoQuestions(state.topic,state.count,state.difficulty);
+  }
+  startGame();
+});
+
+document.getElementById('new-quiz-btn').addEventListener('click',()=>{
+  clearInterval(state.classicTimer);clearInterval(state.bombTimer);
+  document.getElementById('explode-overlay').classList.remove('show');
+  clearUsed();
+  showScreen('config');
+});
 
 // AUDIO
 let audioCtx=null;
