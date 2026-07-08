@@ -636,21 +636,32 @@ Requirements:
 
 Return ONLY this exact JSON structure with no other text:
 {"quiz_metadata":{"topic":"${topic}","difficulty":"${difficulty}","total_questions":${count}},"questions":[{"id":1,"question_text":"Scenario: [2-3 sentence workplace situation describing a realistic Workday consulting or admin scenario]. [Specific question ending with ?]","options":["a. [option text]","b. [option text]","c. [option text]","d. [option text]"],"correct_answer":"a. [matching option text]","explanation":"[Concise explanation naming the specific Workday concept, configuration object, or behavior that makes this the correct answer.]"}]}`;
-  const res=await fetch('https://api.openai.com/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${state.apiKey}`},body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],temperature:0.7})});
-  if(!res.ok) throw new Error('API error '+res.status);
+  const res=await fetch('https://api.openai.com/v1/chat/completions',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':`Bearer ${state.apiKey}`},
+    body:JSON.stringify({model:'gpt-4o-mini',messages:[{role:'system',content:sys},{role:'user',content:usr}],temperature:0.7})
+  });
+  if(!res.ok){
+    const errBody=await res.text();
+    throw new Error(`OpenAI API error ${res.status}: ${errBody.slice(0,200)}`);
+  }
   const data=await res.json();
-  let raw=data.choices[0].message.content.trim().replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/,'').trim();
-  const parsed=JSON.parse(raw);
-  // Normalise options: strip leading "a. " / "b. " / "c. " / "d. " prefixes so
-  // answer-matching works regardless of whether the AI includes them or not.
+  if(!data.choices||!data.choices[0]) throw new Error('No choices returned from OpenAI');
+  let raw=data.choices[0].message.content.trim()
+    .replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
+  let parsed;
+  try{ parsed=JSON.parse(raw); }
+  catch(e){ throw new Error('JSON parse failed: '+raw.slice(0,120)); }
+  if(!parsed.questions||!Array.isArray(parsed.questions)) throw new Error('No questions array in response');
+  // Normalise a. / b. / c. / d. prefixes from options and correct_answer
   const stripPrefix=s=>String(s).replace(/^[a-dA-D][.)]\s*/,'').trim();
-  const questions = parsed.questions.map(q=>({
+  const questions=parsed.questions.map(q=>({
     ...q,
     options:(q.options||[]).map(o=>stripPrefix(o)),
     correct_answer:stripPrefix(q.correct_answer)
   }));
-  // Register all returned questions in the dedup store so Play Again never repeats them
-  usedQuestions.addAll(topic, difficulty, questions);
+  // Register questions in dedup store so Play Again never repeats them
+  markUsed(questions);
   return questions;
 }
 
@@ -668,12 +679,19 @@ document.getElementById('start-btn').addEventListener('click',async()=>{
   document.getElementById('loading-text').textContent=`Generating ${state.count} questions on "${topic}"…`;
   document.getElementById('loading-sub').textContent=state.apiKey?'Calling OpenAI API…':'Using built-in demo questions (no API key provided)';
   try{
-    state.questions=state.apiKey?await fetchQuestionsFromAI(topic,state.count,state.difficulty):await(async()=>{await new Promise(r=>setTimeout(r,1400));return generateDemoQuestions(topic,state.count,state.difficulty);})();
+    if(state.apiKey){
+      state.questions=await fetchQuestionsFromAI(topic,state.count,state.difficulty);
+    } else {
+      await new Promise(r=>setTimeout(r,900));
+      state.questions=generateDemoQuestions(topic,state.count,state.difficulty);
+    }
     startGame();
   }catch(e){
-    document.getElementById('loading-text').textContent='AI error — falling back to demo questions';
+    // Show the REAL error so we can diagnose it
+    document.getElementById('loading-text').textContent='⚠️ API Error — see details below';
     document.getElementById('loading-sub').textContent=e.message;
-    await new Promise(r=>setTimeout(r,1500));
+    await new Promise(r=>setTimeout(r,3000));
+    // Only fall back to demo after showing the real error for 3 seconds
     state.questions=generateDemoQuestions(topic,state.count,state.difficulty);
     startGame();
   }
