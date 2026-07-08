@@ -269,6 +269,11 @@ footer{text-align:center;font-size:12px;color:var(--mut);margin-top:50px;padding
   <div class="load-title" id="load-title">Generating your quiz...</div>
   <div class="load-sub" id="load-sub">Asking AI to craft your questions</div>
   <p class="muted" style="max-width:400px;text-align:center;margin-top:8px">The AI is building scenario-based questions tailored to your topic and difficulty level.</p>
+  <div id="load-err" style="display:none;max-width:540px;background:rgba(240,82,82,.12);border:1px solid #f05252;border-radius:10px;padding:14px 16px;font-size:13px;color:#fca5a5;font-family:monospace;word-break:break-all;text-align:left;margin-top:8px"></div>
+  <div id="load-actions" style="display:none;gap:12px;margin-top:16px">
+    <button class="btn btn-sec" id="load-retry">Retry AI</button>
+    <button class="btn btn-pri" id="load-demo">Use Demo Questions Instead</button>
+  </div>
 </div>
 
 <!-- SCREEN 3a: CLASSIC -->
@@ -456,30 +461,63 @@ function updateHUD() {
 document.getElementById('start-btn').addEventListener('click', async function() {
   var topic = document.getElementById('topic-input').value.trim();
   if (!topic) { alert('Please enter a topic first!'); return; }
+  // Always re-read API key directly from input at click time
+  var keyInput = document.getElementById('api-key').value.trim();
   G.topic = topic;
   G.count = parseInt(document.getElementById('q-slider').value);
-  G.apiKey = document.getElementById('api-key').value.trim();
+  G.apiKey = keyInput;
   G.cur = 0; G.score = 0; G.streak = 0; G.bestStreak = 0;
   G.combo = 1; G.answers = []; G.hp = 100; G.gold = 0;
   G.cLifelines = {ff:true, skip:true, hint:true};
   show('loading');
   document.getElementById('load-title').textContent = 'Generating ' + G.count + ' questions on "' + topic + '"...';
-  document.getElementById('load-sub').textContent = G.apiKey ? 'Calling OpenAI API...' : 'No API key - using demo questions';
-  try {
-    if (G.apiKey) {
-      G.questions = await fetchAI(topic, G.count, G.difficulty);
-    } else {
-      await sleep(800);
-      G.questions = demoQuestions(topic, G.count);
-    }
-    launchGame();
-  } catch(e) {
-    document.getElementById('load-title').textContent = 'AI Error - loading demo questions';
-    document.getElementById('load-sub').textContent = e.message;
-    await sleep(2500);
+  if (!keyInput) {
+    document.getElementById('load-sub').textContent = 'No API key entered - loading topic-matched demo questions';
+    await sleep(700);
     G.questions = demoQuestions(topic, G.count);
     launchGame();
+    return;
   }
+  // We have a key - try AI
+  document.getElementById('load-sub').textContent = 'Calling OpenAI (gpt-4o-mini)...';
+  document.getElementById('load-err').style.display = 'none';
+  try {
+    G.questions = await fetchAI(topic, G.count, G.difficulty);
+    launchGame();
+  } catch(err) {
+    // Show the REAL error - do NOT auto-dismiss
+    document.getElementById('load-title').textContent = 'AI call failed';
+    document.getElementById('load-sub').textContent = 'See error details below:';
+    document.getElementById('load-err').style.display = 'block';
+    document.getElementById('load-err').textContent = err.message;
+    document.getElementById('load-actions').style.display = 'flex';
+  }
+});
+
+document.getElementById('load-retry').addEventListener('click', async function() {
+  document.getElementById('load-err').style.display = 'none';
+  document.getElementById('load-actions').style.display = 'none';
+  document.getElementById('load-title').textContent = 'Retrying...';
+  document.getElementById('load-sub').textContent = 'Calling OpenAI again...';
+  try {
+    G.questions = await fetchAI(G.topic, G.count, G.difficulty);
+    launchGame();
+  } catch(err) {
+    document.getElementById('load-title').textContent = 'AI call failed again';
+    document.getElementById('load-err').style.display = 'block';
+    document.getElementById('load-err').textContent = err.message;
+    document.getElementById('load-actions').style.display = 'flex';
+  }
+});
+
+document.getElementById('load-demo').addEventListener('click', async function() {
+  document.getElementById('load-err').style.display = 'none';
+  document.getElementById('load-actions').style.display = 'none';
+  document.getElementById('load-title').textContent = 'Loading demo questions...';
+  document.getElementById('load-sub').textContent = 'Using topic-matched built-in questions';
+  await sleep(500);
+  G.questions = demoQuestions(G.topic, G.count);
+  launchGame();
 });
 
 function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
