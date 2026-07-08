@@ -533,50 +533,70 @@ function launchGame() {
 // AI FETCH
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchAI(topic, count, difficulty) {
-  var sys = 'You are an expert quiz generator. You create engaging, scenario-based multiple-choice questions.\n' +
-    'Rules:\n' +
-    '- Every question MUST start with a 1-2 sentence real-world scenario before the question itself\n' +
-    '- 4 answer choices per question, exactly one correct\n' +
-    '- Difficulty ' + difficulty + ': ' + (difficulty==='Beginner'?'recall facts':'difficulty==="Intermediate"?apply concepts:analyse and evaluate complex scenarios') + '\n' +
-    '- No duplicate questions or answer choices\n' +
-    '- Plausible distractors - wrong answers should not be obviously wrong\n' +
-    '- Return ONLY valid JSON, no markdown, no code fences, no extra text';
+  var diffDesc = difficulty === 'Expert' ? 'analyse and troubleshoot complex situations' :
+                 difficulty === 'Intermediate' ? 'apply concepts to real scenarios' : 'recall basic facts';
 
-  var usr = 'Generate a multiple-choice quiz.\n\nTopic: ' + topic + '\nDifficulty: ' + difficulty + '\nNumber of Questions: ' + count + '\n\n' +
-    'Return ONLY this exact JSON (no markdown):\n' +
-    '{"quiz_metadata":{"topic":"' + topic + '","difficulty":"' + difficulty + '"},' +
-    '"questions":[{"id":1,"question_text":"Scenario: ... Question?","options":["option A","option B","option C","option D"],"correct_answer":"option A","explanation":"Brief explanation."}]}';
+  var sys = 'You are a quiz generator. Return ONLY valid JSON, no markdown, no code fences. ' +
+    'Each question starts with a 1-2 sentence real-world scenario. ' +
+    '4 answer choices, exactly one correct. Plausible wrong answers. ' +
+    'Difficulty: ' + difficulty + ' means ' + diffDesc + '.';
+
+  var usr = 'Topic: ' + topic + ' | Difficulty: ' + difficulty + ' | Count: ' + count + '\n' +
+    'Return ONLY this JSON (no markdown, no extra text):\n' +
+    '{"questions":[{"id":1,"question_text":"Scenario: ...\\nQuestion?","options":["A","B","C","D"],"correct_answer":"A","explanation":"Reason."}]}';
 
   var res;
   try {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST', mode:'cors',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer ' + G.apiKey},
-      body:JSON.stringify({
-        model:'gpt-4o-mini',
-        messages:[{role:'system',content:sys},{role:'user',content:usr}],
-        temperature:0.7, max_tokens:4000
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + G.apiKey.trim()
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [{role:'system', content:sys}, {role:'user', content:usr}],
+        temperature: 0.7,
+        max_tokens: 3500
       })
     });
-  } catch(e) { throw new Error('Network error: ' + e.message); }
+  } catch(netErr) {
+    throw new Error('Network error: ' + netErr.message);
+  }
 
   if (!res.ok) {
-    var t = ''; try { t = await res.text(); } catch(_) {}
-    throw new Error('OpenAI ' + res.status + ': ' + t.slice(0,200));
+    var errText = '';
+    try { errText = await res.text(); } catch(_) {}
+    throw new Error('OpenAI ' + res.status + ': ' + errText.slice(0, 250));
   }
-  var data = await res.json();
-  if (!data.choices || !data.choices[0]) throw new Error('No choices returned');
+
+  var data;
+  try { data = await res.json(); } catch(e) {
+    throw new Error('Could not parse OpenAI response');
+  }
+
+  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    throw new Error('Unexpected response: ' + JSON.stringify(data).slice(0, 150));
+  }
+
   var raw = data.choices[0].message.content.trim()
     .replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+
   var parsed;
-  try { parsed = JSON.parse(raw); } catch(e) { throw new Error('JSON parse failed: ' + raw.slice(0,100)); }
-  if (!parsed.questions || !Array.isArray(parsed.questions)) throw new Error('No questions array');
-  var strip = function(s){ return String(s).replace(/^[a-dA-D][.)]\s*/,'').trim(); };
+  try { parsed = JSON.parse(raw); } catch(e) {
+    throw new Error('JSON parse failed. Got: ' + raw.slice(0, 150));
+  }
+
+  if (!parsed.questions || !Array.isArray(parsed.questions)) {
+    throw new Error('No questions array in response: ' + JSON.stringify(parsed).slice(0,150));
+  }
+
+  var strip = function(s) { return String(s).replace(/^[a-dA-D][.)\s]*/,'').trim(); };
   return parsed.questions.map(function(q) {
     return {
-      question_text: q.question_text,
-      options: (q.options||[]).map(strip),
-      correct_answer: strip(q.correct_answer),
+      question_text: q.question_text || '',
+      options: (q.options || []).map(strip),
+      correct_answer: strip(q.correct_answer || ''),
       explanation: q.explanation || ''
     };
   });
