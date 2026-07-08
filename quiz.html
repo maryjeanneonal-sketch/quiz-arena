@@ -259,6 +259,11 @@ footer{text-align:center;font-size:12px;color:var(--mut);margin-top:50px;padding
     </div>
 
     <button class="btn btn-pri btn-lg btn-full" id="start-btn">&#9654; Generate Quiz &amp; Start Game</button>
+    <div id="cors-warning" style="display:none;background:rgba(245,158,11,.12);border:1px solid #f59e0b;border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:15px;font-weight:700;color:#f59e0b;margin-bottom:8px">&#9888; Running on GitHub Pages? Browser may block OpenAI calls.</div>
+      <p style="font-size:13px;color:#d4a017;margin-bottom:12px">For best results, download this file and open it directly in your browser. Running locally (file://) bypasses all CORS restrictions.</p>
+      <button class="btn btn-pri" id="download-btn">&#11123; Download Quiz Arena (Run Locally)</button>
+    </div>
     <footer>Quiz Arena &mdash; AI-Powered Gamified Learning</footer>
   </div>
 </div>
@@ -545,6 +550,13 @@ async function fetchAI(topic, count, difficulty) {
     'Return ONLY this JSON (no markdown, no extra text):\n' +
     '{"questions":[{"id":1,"question_text":"Scenario: ...\\nQuestion?","options":["A","B","C","D"],"correct_answer":"A","explanation":"Reason."}]}';
 
+  var payload = {
+    model: 'gpt-4o-mini',
+    messages: [{role:'system', content:sys}, {role:'user', content:usr}],
+    temperature: 0.7,
+    max_tokens: 3500
+  };
+
   var res;
   try {
     res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -553,15 +565,17 @@ async function fetchAI(topic, count, difficulty) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + G.apiKey.trim()
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{role:'system', content:sys}, {role:'user', content:usr}],
-        temperature: 0.7,
-        max_tokens: 3500
-      })
+      body: JSON.stringify(payload)
     });
   } catch(netErr) {
-    throw new Error('Network error: ' + netErr.message);
+    // NetworkError usually means CORS block from hosted page.
+    // Solution: download this file and open it locally (file://)
+    throw new Error(
+      'Network blocked by browser (CORS). Fix: click the download button ' +
+      'on the start screen, open the downloaded file directly in your browser, ' +
+      'then enter your API key. Running locally bypasses this restriction. ' +
+      'Raw error: ' + netErr.message
+    );
   }
 
   if (!res.ok) {
@@ -1040,6 +1054,25 @@ document.getElementById('r-new').addEventListener('click', function() {
   clearInterval(G.cTimer); clearInterval(G.bTimer);
   document.getElementById('boom').classList.remove('on');
   show('config');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOWNLOAD & CORS DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+// Show CORS warning if running from a hosted page (not file://)
+(function() {
+  if (window.location.protocol !== 'file:') {
+    document.getElementById('cors-warning').style.display = 'block';
+  }
+})();
+
+document.getElementById('download-btn').addEventListener('click', function() {
+  var blob = new Blob([document.documentElement.outerHTML], {type: 'text/html'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'quiz-arena.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
